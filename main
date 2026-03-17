@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MinionBank</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+body {
+  margin:0; padding:0; font-family:'Roboto',sans-serif;
+  background: linear-gradient(135deg,#FFD700,#FFB347);
+  color:#333; overflow-x:hidden;
+}
+header {background:#FFA500; color:white; padding:20px; text-align:center; font-size:2rem; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.2);}
+.container {max-width:900px;margin:20px auto;padding:20px;background:#FFFACD;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,0.3);}
+.card {background:#FFF8DC;border-radius:10px;padding:20px;margin-bottom:20px;box-shadow:0 4px 10px rgba(0,0,0,0.2);transition:all 0.3s ease;}
+.card:hover {transform:translateY(-5px);box-shadow:0 8px 20px rgba(0,0,0,0.3);}
+.buttons {display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+button {padding:10px 20px;font-size:1rem;font-weight:bold;border:none;border-radius:8px;cursor:pointer;transition:0.3s;}
+button:hover {transform:scale(1.05);opacity:0.9;}
+.mine {background:#32CD32;color:white;}
+.send {background:#1E90FF;color:white;}
+.custom {background:#FF69B4;color:white;}
+.hidden {display:none;}
+input {padding:8px 12px;font-size:1rem;border-radius:5px;border:1px solid #ccc;margin:5px 0; width:calc(100%-20px);}
+#tapArea {width:200px;height:200px;background:#FFD700;border-radius:50%;margin:20px auto;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:bold;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.3);transition:0.2s;}
+#tapArea:active {transform:scale(0.95);}
+.mnemonic {background:#FFF8DC;padding:10px;border-radius:10px;margin-top:10px;line-height:1.5;}
+</style>
+</head>
+<body>
+
+<header>MinionBank 💰</header>
+<div class="container">
+
+<!-- Регистрация / вход -->
+<div id="loginPage" class="card">
+  <h2 id="formTitle">Войти</h2>
+  <div id="loginForm">
+    <input type="text" id="loginName" placeholder="Имя пользователя">
+    <input type="password" id="loginPassword" placeholder="Пароль">
+    <button onclick="loginUser()">🔑 Войти</button>
+    <p>Нет аккаунта? <a href="#" onclick="showRegister()">Зарегистрироваться</a></p>
+  </div>
+  <div id="registerForm" class="hidden">
+    <input type="text" id="regName" placeholder="Имя пользователя">
+    <input type="email" id="regEmail" placeholder="Email">
+    <input type="password" id="regPassword" placeholder="Пароль">
+    <button onclick="registerUser()">📝 Зарегистрироваться</button>
+    <p>Уже есть аккаунт? <a href="#" onclick="showLogin()">Войти</a></p>
+  </div>
+</div>
+
+<!-- Мнемоника после регистрации -->
+<div id="mnemonicPage" class="card hidden">
+  <h2>Сохраните свои 24 слова восстановления</h2>
+  <p>Если вы потеряете доступ к кошельку, эти слова помогут восстановить баланс:</p>
+  <div id="mnemonicWords" class="mnemonic"></div>
+  <button onclick="goToMain()">Продолжить</button>
+</div>
+
+<!-- Главный экран -->
+<div id="mainPage" class="hidden">
+  <div class="card" id="balanceCard">
+    <h2 id="userName">Не вошли в систему</h2>
+    <p id="userBalance">Баланс: -</p>
+    <p id="userAddress">Адрес: -</p>
+  </div>
+
+  <div class="buttons">
+    <button class="mine" onclick="showMinePage()">⛏️ Майнить MINION</button>
+    <button class="send" onclick="showSendForm()">📤 Отправить MINION</button>
+    <button class="custom" onclick="showCustomForm()">🏷️ Купить кастомный адрес</button>
+  </div>
+</div>
+
+<!-- Форма отправки -->
+<div id="sendForm" class="card hidden">
+  <h3>Отправка MINION</h3>
+  <input type="text" id="recipientInput" placeholder="Адрес получателя">
+  <input type="number" id="amountInput" placeholder="Сумма">
+  <button class="send" onclick="sendTokens()">Отправить</button>
+</div>
+
+<!-- Форма кастомного адреса -->
+<div id="customForm" class="card hidden">
+  <h3>Купить кастомный адрес</h3>
+  <p>Предложения дешевле: <span id="cheapOffer">minion1.minion.bank, minion2.minion.bank</span></p>
+  <input type="text" id="customInput" placeholder="Имя для адреса">
+  <button class="custom" onclick="buyCustomAddress()">Купить</button>
+</div>
+
+<!-- Страница майнинга -->
+<div id="minePage" class="card hidden">
+  <h3>Майнить MINION</h3>
+  <p>Нажмите на круг 100 раз чтобы получить токены. Энергия перезаряжается 10 минут после использования</p>
+  <div id="tapArea">💎</div>
+  <p>Нажато: <span id="tapCount">0</span>/100</p>
+  <button onclick="exitMine()">Вернуться</button>
+</div>
+
+</div>
+
+<script>
+let users={};
+let currentUser=null;
+let MINE_REWARD=10;
+let CUSTOM_ADDRESS_COST=1000;
+let taps=0;
+let energyAvailable=true;
+const energyRechargeTime=10*60*1000;
+
+// ----------------------
+// Переключение форм
+// ----------------------
+function showRegister(){document.getElementById("loginForm").classList.add("hidden");document.getElementById("registerForm").classList.remove("hidden");document.getElementById("formTitle").innerText="Регистрация";}
+function showLogin(){document.getElementById("registerForm").classList.add("hidden");document.getElementById("loginForm").classList.remove("hidden");document.getElementById("formTitle").innerText="Войти";}
+
+// ----------------------
+// Регистрация / вход
+// ----------------------
+function registerUser(){
+  const name=document.getElementById("regName").value.trim();
+  const email=document.getElementById("regEmail").value.trim();
+  const password=document.getElementById("regPassword").value;
+  if(!name||!email||!password){alert("Заполните все поля");return;}
+  if(users[name]){alert("Пользователь уже существует");return;}
+  users[name]={balance:100,lastMine:null,custom_address:null,email,password};
+  currentUser=name;
+  generateMnemonic();
+}
+function loginUser(){
+  const name=document.getElementById("loginName").value.trim();
+  const password=document.getElementById("loginPassword").value;
+  if(!users[name]||users[name].password!==password){alert("Неверные данные");return;}
+  currentUser=name;
+  document.getElementById("loginPage").classList.add("hidden");
+  document.getElementById("mainPage").classList.remove("hidden");
+  updateUI();
+}
+
+// ----------------------
+// Мнемоника
+// ----------------------
+function generateMnemonic(){
+  const words="apple banana cat dog elephant frog grape hat igloo joker kite lion moon nut orange panda queen rabbit sun tiger umbrella violin wolf xray yellow zebra".split(" ");
+  let mnemonic=[];
+  for(let i=0;i<24;i++){mnemonic.push(words[Math.floor(Math.random()*words.length)]);}
+  document.getElementById("mnemonicWords").innerText=mnemonic.join(" ");
+  document.getElementById("loginPage").classList.add("hidden");
+  document.getElementById("mnemonicPage").classList.remove("hidden");
+}
+function goToMain(){document.getElementById("mnemonicPage").classList.add("hidden");document.getElementById("mainPage").classList.remove("hidden");updateUI();}
+
+// ----------------------
+// Обновление баланса
+// ----------------------
+function updateUI(){
+  if(currentUser){
+    document.getElementById('userName').innerText=currentUser;
+    document.getElementById('userBalance').innerText="Баланс: "+users[currentUser].balance+" MINION";
+    document.getElementById('userAddress').innerText="Адрес: "+(users[currentUser].custom_address||"-");
+  }
+}
+
+// ----------------------
+// Отправка токенов
+// ----------------------
+function showSendForm(){hideAll();document.getElementById("sendForm").classList.remove("hidden");}
+function sendTokens(){
+  const recipient=document.getElementById("recipientInput").value.trim();
+  const amount=parseInt(document.getElementById("amountInput").value);
+  if(!recipient||!amount){alert("Введите адрес и сумму");return;}
+  if(!users[recipient]){alert("Получатель не найден");return;}
+  if(users[currentUser].balance<amount){alert("Недостаточно средств");return;}
+  users[currentUser].balance-=amount;
+  users[recipient].balance+=amount;
+  updateUI();
+  alert("Отправлено "+amount+" MINION пользователю "+recipient);
+  hideAll();
+}
+
+// ----------------------
+// Кастомные адреса
+// ----------------------
+function showCustomForm(){hideAll();document.getElementById("customForm").classList.remove("hidden");}
+function buyCustomAddress(){
+  const name=document.getElementById("customInput").value.trim();
+  if(!name){alert("Введите имя");return;}
+  const full=name+".minion.bank";
+  for(let u in users){if(users[u].custom_address==full){alert("Адрес занят");return;}}
+  if(users[currentUser].balance<CUSTOM_ADDRESS_COST){alert("Недостаточно средств");return;}
+  users[currentUser].balance-=CUSTOM_ADDRESS_COST;
+  users[currentUser].custom_address=full;
+  updateUI();
+  alert("Вы купили адрес "+full);
+  hideAll();
+}
+
+// ----------------------
+// Майнинг
+// ----------------------
+function showMinePage(){
+  if(!energyAvailable){alert("Энергия перезаряжается. Подождите.");return;}
+  hideAll();
+  document.getElementById("minePage").classList.remove("hidden");
+  taps=0;
+  document.getElementById("tapCount").innerText="0";
+}
+document.getElementById("tapArea").addEventListener("click",()=>{
+  if(!energyAvailable||taps>=100) return;
+  taps++;
+  document.getElementById("tapCount").innerText=taps;
+  if(taps>=100){
+    users[currentUser].balance+=MINE_REWARD;
+    updateUI();
+    alert("Майнинг завершен! Вы получили "+MINE_REWARD+" MINION");
+    energyAvailable=false;
+    setTimeout(()=>{energyAvailable=true;alert("Энергия восстановлена!");},10*60*1000);
+  }
+});
+function exitMine(){hideAll();document.getElementById("mainPage").classList.remove("hidden");}
+
+// ----------------------
+// Скрыть все формы
+// ----------------------
+function hideAll(){
+  document.getElementById("sendForm").classList.add("hidden");
+  document.getElementById("customForm").classList.add("hidden");
+  document.getElementById("minePage").classList.add("hidden");
+}
+
+// ----------------------
+// Тестовый пользователь
+// ----------------------
+users["Alice"]={balance:100,lastMine:null,custom_address:null,email:"alice@test.com",password:"1234"};
+
+</script>
+</body>
+</html>
